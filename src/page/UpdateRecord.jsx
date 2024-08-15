@@ -55,7 +55,7 @@ function UpdateRecord() {
 
             if (response.ok) {
                 console.log('Record updated successfully');
-                navigate("/");
+                navigate("/Home");
             } else {
                 console.error('Failed to update record');
             }
@@ -65,7 +65,7 @@ function UpdateRecord() {
     };
 
     return (<>
-        <a href="/">Trở về</a>
+        <a href="/Home">Trở về</a>
         <form onSubmit={handleSubmit}>
             <label>
                 Date:

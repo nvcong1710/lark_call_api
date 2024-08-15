@@ -7,18 +7,22 @@ const app = express();
 const PORT = 3001;
 let app_access_token = "";
 var token = "";
+var user_access_token = "";
+var user_id = "";
+const APPID = "cli_a63863adcb39d010";
+const APPSECRET = "l4jTJ1jScEJ6TnXgNwgwkJiNl3ZquCSQ";
 
 app.use(cors());
 app.use(express.json());
 
-//================GET TENANT TOKEN===========
+//================GET APP ACCESS TOKEN===========
 const getAppAccessToken = async () => {
   try {
     const response = await axios.post(
       "https://open.larksuite.com/open-apis/auth/v3/app_access_token/internal",
       {
-        app_id: "cli_a63863adcb39d010",
-        app_secret: "l4jTJ1jScEJ6TnXgNwgwkJiNl3ZquCSQ",
+        app_id: APPID,
+        app_secret: APPSECRET,
       }
     );
 
@@ -32,6 +36,40 @@ const getAppAccessToken = async () => {
   }
 };
 getAppAccessToken();
+
+//=================GET USER ACCESS TOKEN==============
+app.get("/api/get-user-access-token", async (req, res) => {
+  const larkOAuthUrl = `https://open.larksuite.com/open-apis/authen/v1/authorize?app_id=${APPID}&redirect_uri=http://localhost:3000/&scope=bitable:app&state=RANDOMSTATE`;
+  res.redirect(larkOAuthUrl);
+});
+
+//===================================================
+app.post("/api/auth/callback", (req, res) => {
+  const { code } = req.body;
+
+  if (!code) {
+    return res.status(400).json({ error: "Code is required" });
+  }
+
+  axios
+    .post("https://open.larksuite.com/open-apis/authen/v1/access_token", {
+      code: code,
+      grant_type: "authorization_code",
+      app_id: APPID,
+      app_secret: APPSECRET,
+    })
+    .then((response) => {
+      user_access_token = "Bearer " + response.data.data.access_token;
+      user_id = response.data.data.open_id;
+      console.log("user id: " + user_id);
+      console.log("access token : " + user_access_token);
+      res.json(response.data);
+    })
+    .catch((error) => {
+      res.status(500).json({ error: "Failed to fetch access token" });
+    });
+});
+
 //===============GET ALL RECORDS============
 app.get("/api/records", async (req, res) => {
   try {
@@ -40,7 +78,7 @@ app.get("/api/records", async (req, res) => {
       {
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          Authorization: token,
+          Authorization: user_access_token,
         },
       }
     );
@@ -59,7 +97,7 @@ app.get("/api/records/getbyid/:id", async (req, res) => {
       {
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          Authorization: token,
+          Authorization: user_access_token,
         },
       }
     );
@@ -72,6 +110,8 @@ app.get("/api/records/getbyid/:id", async (req, res) => {
 //===============CREATE RECORD============
 app.post("/api/records/create", async (req, res) => {
   const fields = req.body;
+  fields.fields.Person = [{ id: user_id }];
+  console.log(fields);
   const myUUID = uuidv4();
 
   try {
@@ -81,14 +121,12 @@ app.post("/api/records/create", async (req, res) => {
       {
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          Authorization: token,
+          Authorization: user_access_token,
         },
       }
     );
 
-    res.status(201).json(response.data);
-
-    const messageResponse = await axios.post(
+    await axios.post(
       "https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=open_id",
       {
         receive_id: "ou_ed890b72079144456a7d006f954e17d9",
@@ -103,6 +141,7 @@ app.post("/api/records/create", async (req, res) => {
         },
       }
     );
+    res.status(201).json(response.data);
   } catch (error) {
     console.error("Error creating record:", error);
     res.status(500).json("Error creating record");
@@ -113,6 +152,7 @@ app.post("/api/records/create", async (req, res) => {
 app.put("/api/records/update/:id", async (req, res) => {
   const { id } = req.params;
   const updatedData = req.body;
+  updatedData.Person = [{ id: user_id }];
   const myUUID = uuidv4();
   try {
     const response = await axios.put(
@@ -121,16 +161,15 @@ app.put("/api/records/update/:id", async (req, res) => {
       {
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          Authorization: token,
+          Authorization: user_access_token,
         },
       }
     );
-    res.json(response.data);
 
-    const messageResponse = await axios.post(
+    await axios.post(
       "https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=open_id",
       {
-        receive_id: "ou_ed890b72079144456a7d006f954e17d9",
+        receive_id: user_id,
         msg_type: "text",
         content: JSON.stringify({ text: "update record" }),
         uuid: myUUID,
@@ -142,6 +181,7 @@ app.put("/api/records/update/:id", async (req, res) => {
         },
       }
     );
+    res.json(response.data);
   } catch (error) {
     res.status(500).json({ error: "Error updating record" });
   }
@@ -157,16 +197,16 @@ app.delete("/api/records/delete/:id", async (req, res) => {
       {
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          Authorization: token,
+          Authorization: user_access_token,
         },
       }
     );
     // res.json(response);
 
-    const messageResponse = await axios.post(
+    await axios.post(
       "https://open.larksuite.com/open-apis/im/v1/messages?receive_id_type=open_id",
       {
-        receive_id: "ou_ed890b72079144456a7d006f954e17d9",
+        receive_id: user_id,
         msg_type: "text",
         content: JSON.stringify({ text: "delete record" }),
         uuid: myUUID,

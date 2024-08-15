@@ -7,7 +7,7 @@ function CreateRecord() {
     const [formData, setFormData] = useState({
         Date: '',
         Task: '',
-        Person: [{ id: '' }],
+        // Person: [{ id: '' }],
         'Single Option': ''
     });
 
@@ -27,9 +27,9 @@ function CreateRecord() {
             'Single Option': formData['Single Option'],
         };
 
-        if (formData.Person && formData.Person[0].id !== '') {
-            fields.Person = formData.Person;
-        }
+        // if (formData.Person && formData.Person[0].id !== '') {
+        //     fields.Person = formData.Person;
+        // }
 
         console.log(fields);
         try {
@@ -45,7 +45,7 @@ function CreateRecord() {
 
             if (response.ok) {
                 console.log('Record created successfully');
-                navigate("/");
+                navigate("/Home");
             } else {
                 console.error('Failed to create record');
             }
@@ -56,7 +56,7 @@ function CreateRecord() {
 
 
     return (<>
-        <a href="/">Trở về</a>
+        <a href="/Home">Trở về</a>
         <form onSubmit={handleSubmit}>
             <div>
                 <label>Date:</label>
@@ -76,7 +76,7 @@ function CreateRecord() {
                     onChange={handleChange}
                 />
             </div>
-            <div>
+            {/* <div>
                 <label>Person ID:</label>
                 <input
                     type="text"
@@ -90,7 +90,7 @@ function CreateRecord() {
                         });
                     }}
                 />
-            </div>
+            </div> */}
             <div>
                 <label>Single Option:</label>
                 <select
