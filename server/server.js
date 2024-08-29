@@ -3,12 +3,16 @@ const axios = require("axios");
 const cors = require("cors");
 const { v4: uuidv4 } = require("uuid");
 
+const NodeCache = require("node-cache");
+
 const app = express();
+const appCache = new NodeCache();
 const PORT = 3001;
 let app_access_token = "";
 var token = "";
-var user_access_token = "";
+var user_access_token;
 var user_id = "";
+var refresh_token;
 const APPID = "cli_a63863adcb39d010";
 const APPSECRET = "l4jTJ1jScEJ6TnXgNwgwkJiNl3ZquCSQ";
 
@@ -61,7 +65,10 @@ app.post("/api/auth/callback", (req, res) => {
     .then((response) => {
       user_access_token = "Bearer " + response.data.data.access_token;
       user_id = response.data.data.open_id;
+      refresh_token = response.data.data.refresh_token;
+      appCache.set("user_access_token", user_access_token, 10);
       console.log("user id: " + user_id);
+      console.log("refresh token: " + refresh_token);
       console.log("access token : " + user_access_token);
       res.json(response.data);
     })
@@ -69,16 +76,20 @@ app.post("/api/auth/callback", (req, res) => {
       res.status(500).json({ error: "Failed to fetch access token" });
     });
 });
-
+//===============GET CACHE================
+const getUserAccessToken = () => {
+  return appCache.get("user_access_token");
+};
 //===============GET ALL RECORDS============
 app.get("/api/records", async (req, res) => {
   try {
+    const tokenValid = await ensureValidUserToken();
     const response = await axios.get(
       "https://open.larksuite.com/open-apis/bitable/v1/apps/U3uSbIXSXaPUC1sB7FBlyOqqgNh/tables/tbl5VfIwxti0fKno/records",
       {
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          Authorization: user_access_token,
+          Authorization: tokenValid,
         },
       }
     );
@@ -91,13 +102,14 @@ app.get("/api/records", async (req, res) => {
 //===============GET RECORD BY ID============
 app.get("/api/records/getbyid/:id", async (req, res) => {
   const { id } = req.params;
+  const tokenValid = await ensureValidUserToken();
   try {
     const response = await axios.get(
       `https://open.larksuite.com/open-apis/bitable/v1/apps/U3uSbIXSXaPUC1sB7FBlyOqqgNh/tables/tbl5VfIwxti0fKno/records/${id}`,
       {
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          Authorization: user_access_token,
+          Authorization: tokenValid,
         },
       }
     );
@@ -107,12 +119,49 @@ app.get("/api/records/getbyid/:id", async (req, res) => {
   }
 });
 
+//================TOKEN VALIDATION============
+const ensureValidUserToken = async () => {
+  if (!getUserAccessToken() || getUserAccessToken() === "") {
+    return refreshAccessToken();
+  } else {
+    return getUserAccessToken();
+  }
+};
+
+//===============REFRESH USER ACCESS TOKEN==========
+const refreshAccessToken = async () => {
+  try {
+    const response = await axios.post(
+      "https://open.larksuite.com/open-apis/authen/v1/oidc/refresh_access_token",
+      {
+        grant_type: "refresh_token",
+        refresh_token: refresh_token,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: app_access_token,
+        },
+      }
+    );
+
+    user_access_token = `Bearer ${response.data.data.access_token}`;
+    refresh_token = response.data.data.refresh_token;
+
+    console.log("Access token refreshed successfully: " + user_access_token);
+    appCache.set("user_access_token", user_access_token, 10);
+    return user_access_token;
+  } catch (error) {
+    console.error("Error refreshing access token:", error);
+  }
+};
 //===============CREATE RECORD============
 app.post("/api/records/create", async (req, res) => {
   const fields = req.body;
   fields.fields.Person = [{ id: user_id }];
   console.log(fields);
   const myUUID = uuidv4();
+  const tokenValid = await ensureValidUserToken();
 
   try {
     const response = await axios.post(
@@ -121,7 +170,7 @@ app.post("/api/records/create", async (req, res) => {
       {
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          Authorization: user_access_token,
+          Authorization: tokenValid,
         },
       }
     );
@@ -154,6 +203,9 @@ app.put("/api/records/update/:id", async (req, res) => {
   const updatedData = req.body;
   updatedData.Person = [{ id: user_id }];
   const myUUID = uuidv4();
+
+  const tokenValid = await ensureValidUserToken();
+
   try {
     const response = await axios.put(
       `https://open.larksuite.com/open-apis/bitable/v1/apps/U3uSbIXSXaPUC1sB7FBlyOqqgNh/tables/tbl5VfIwxti0fKno/records/${id}`,
@@ -161,7 +213,7 @@ app.put("/api/records/update/:id", async (req, res) => {
       {
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          Authorization: user_access_token,
+          Authorization: tokenValid,
         },
       }
     );
@@ -191,13 +243,15 @@ app.put("/api/records/update/:id", async (req, res) => {
 app.delete("/api/records/delete/:id", async (req, res) => {
   const { id } = req.params;
   const myUUID = uuidv4();
+  const tokenValid = await ensureValidUserToken();
+
   try {
     const response = await axios.delete(
       `https://open.larksuite.com/open-apis/bitable/v1/apps/U3uSbIXSXaPUC1sB7FBlyOqqgNh/tables/tbl5VfIwxti0fKno/records/${id}`,
       {
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          Authorization: user_access_token,
+          Authorization: tokenValid,
         },
       }
     );
